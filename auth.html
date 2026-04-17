@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>二因素验证器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsSHA/3.3.1/sha1.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+        }
+        body {
+            background: #f5f7fb;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 16px 8px 32px;
+        }
+        .app-container {
+            max-width: 560px;
+            width: 100%;
+        }
+        .judge-card {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 18px 20px;
+            border-radius: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+            border: 1px solid #334155;
+        }
+        .judge-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: #a5f3fc;
+        }
+        .judge-title::before {
+            content: "✓";
+            background: #10b981;
+            color: white;
+            width: 22px;
+            height: 22px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .judge-text {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            opacity: 0.9;
+        }
+        .judge-text strong {
+            color: #fbbf24;
+        }
+        .panel {
+            background: white;
+            border-radius: 28px;
+            padding: 20px 18px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+        h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .subhead {
+            color: #475569;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            border-left: 4px solid #3b82f6;
+            padding-left: 14px;
+        }
+
+        /* 导入导出工具栏 */
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .toolbar-btn {
+            flex: 1 1 calc(50% - 5px);
+            min-width: 130px;
+            background: white;
+            border: 1.5px solid #cbd5e1;
+            padding: 12px 10px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #1e293b;
+            cursor: pointer;
+            transition: all 0.15s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .toolbar-btn:active {
+            background: #e2e8f0;
+        }
+        .toolbar-btn.export {
+            background: #0f172a;
+            border-color: #0f172a;
+            color: white;
+        }
+        .toolbar-btn.export:active {
+            background: #1e293b;
+        }
+        /* 隐藏文件input */
+        #importFileInput {
+            display: none;
+        }
+
+        .accounts-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 12px;
+        }
+        .accounts-header h3 {
+            font-weight: 500;
+            color: #334155;
+        }
+        .badge {
+            background: #e2e8f0;
+            color: #1e293b;
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .account-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 24px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+        .account-item {
+            background: #f8fafc;
+            border-radius: 20px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid #e2e8f0;
+            transition: all 0.15s;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            -webkit-tap-highlight-color: transparent;
+        }
+        .account-item:active {
+            background: #f1f5f9;
+        }
+        .account-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        }
+        .account-name {
+            font-weight: 600;
+            color: #0f172a;
+            font-size: 1.1rem;
+            word-break: break-word;
+        }
+        .account-meta {
+            font-size: 0.75rem;
+            color: #64748b;
+            display: flex;
+            gap: 8px;
+        }
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 1.8rem;
+            line-height: 1;
+            padding: 8px 6px 8px 12px;
+            cursor: pointer;
+            border-radius: 40px;
+            transition: all 0.15s;
+            opacity: 0.7;
+            min-width: 48px;
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .delete-btn:active {
+            background: #fee2e2;
+            color: #dc2626;
+            opacity: 1;
+        }
+        .empty-list {
+            text-align: center;
+            color: #94a3b8;
+            padding: 32px 16px;
+            background: #f1f5f9;
+            border-radius: 24px;
+            font-size: 0.95rem;
+        }
+
+        .add-section {
+            background: #f1f5f9;
+            border-radius: 20px;
+            padding: 16px 16px 18px;
+            margin-top: 6px;
+        }
+        .field-group {
+            margin-bottom: 14px;
+        }
+        label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #334155;
+            display: block;
+            margin-bottom: 4px;
+        }
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 18px;
+            font-size: 1rem;
+            background: white;
+            transition: border 0.2s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+        }
+        .btn {
+            background: white;
+            border: 1.5px solid #cbd5e1;
+            padding: 12px 18px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 1rem;
+            color: #1e293b;
+            cursor: pointer;
+            transition: all 0.15s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .btn-primary {
+            background: #0f172a;
+            border-color: #0f172a;
+            color: white;
+        }
+        .btn-primary:active {
+            background: #1e293b;
+        }
+        .btn-block {
+            width: 100%;
+        }
+        .hint {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 8px;
+        }
+
+        /* 对话框 */
+        dialog {
+            padding: 0;
+            border: none;
+            border-radius: 32px;
+            background: transparent;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+        }
+        dialog::backdrop {
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background: white;
+            border-radius: 32px;
+            padding: 24px 22px;
+            text-align: center;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .modal-header h3 {
+            font-weight: 600;
+            color: #0f172a;
+            font-size: 1.3rem;
+        }
+        .close-icon {
+            background: none;
+            border: none;
+            font-size: 2rem;
+            line-height: 1;
+            cursor: pointer;
+            color: #94a3b8;
+            padding: 0 4px;
+        }
+        .token-display {
+            font-size: 3.6rem;
+            font-weight: 700;
+            letter-spacing: 8px;
+            font-variant-numeric: tabular-nums;
+            background: #f1f5f9;
+            padding: 18px 10px;
+            border-radius: 30px;
+            margin: 10px 0 16px;
+            color: #0f172a;
+            border: 1px solid #e2e8f0;
+        }
+        .timer-section {
+            margin: 8px 0 12px;
+        }
+        .progress-bar {
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 20px;
+            overflow: hidden;
+            margin: 8px 0 4px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #3b82f6;
+            width: 100%;
+            border-radius: 20px;
+            transition: width 0.3s linear;
+        }
+        .seconds-left {
+            font-size: 0.9rem;
+            color: #475569;
+        }
+        .modal-account-badge {
+            background: #eef2ff;
+            color: #1e40af;
+            padding: 4px 16px;
+            border-radius: 40px;
+            display: inline-block;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+        .copy-btn {
+            background: white;
+            border: 1.5px solid #cbd5e1;
+            padding: 12px 18px;
+            border-radius: 40px;
+            font-weight: 500;
+            margin-top: 8px;
+            width: 100%;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .footer-note {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.8rem;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    
+
+    <div class="panel">
+        <h2>🔐 验证器</h2>
+        <div class="subhead">by gujunyan</div>
+
+        <!-- 导入导出工具栏 (移动友好) -->
+        <div class="toolbar">
+            <button class="toolbar-btn export" id="exportBtn">📤 导出备份</button>
+            <button class="toolbar-btn" id="importBtn">📥 导入备份</button>
+            <input type="file" id="importFileInput" accept=".json,application/json">
+        </div>
+
+        <div class="accounts-header">
+            <h3>📋 我的账号</h3>
+            <span class="badge" id="accountCount">0 个</span>
+        </div>
+
+        <div id="accountListContainer" class="account-list"></div>
+
+        <div class="add-section">
+            <div style="font-weight:600; margin-bottom:12px; color:#1e293b;">➕ 添加账号</div>
+            <div class="field-group">
+                <label>账号名称 (例如: GitHub)</label>
+                <input type="text" id="newAccountName" placeholder="工作邮箱 / 服务名" autocomplete="off" enterkeyhint="next">
+            </div>
+            <div class="field-group">
+                <label>共享密钥 (Base32)</label>
+                <input type="text" id="newSecret" placeholder="例如: JBSWY3DPEHPK3PXP" autocomplete="off" spellcheck="false" enterkeyhint="done">
+            </div>
+            <button class="btn btn-primary btn-block" id="createAccountBtn">保存账号</button>
+            <div class="hint">密钥仅支持 Base32 (A-Z 2-7) ，自动转为大写、去除空格。</div>
+        </div>
+    </div>
+    <div class="footer-note">
+        ⏱️ 验证码基于设备时间 · 请确保时间准确
+    </div>
+</div>
+
+<dialog id="tokenDialog">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="dialogAccountName">账号</h3>
+            <button class="close-icon" id="closeDialogBtn" aria-label="关闭">&times;</button>
+        </div>
+        <div id="dialogAccountIssuer" class="modal-account-badge">TOTP</div>
+        <div class="token-display" id="dialogToken">------</div>
+        <div class="timer-section">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 100%"></div>
+            </div>
+            <div class="seconds-left"><span id="secondsRemaining">30</span> 秒后刷新</div>
+        </div>
+        <button class="copy-btn" id="copyTokenBtn">📋 复制验证码</button>
+        <p style="font-size:0.75rem; color:#94a3b8; margin-top: 12px;">点击外部或按ESC关闭</p>
+    </div>
+</dialog>
+
+<script>
+    (function(){
+        "use strict";
+
+        const STORAGE_KEY = 'totp_accounts_v1';
+        const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+        let accounts = [];
+        let currentDialogAccount = null;
+        let timerInterval = null;
+
+        // DOM 元素
+        const dialog = document.getElementById('tokenDialog');
+        const accountListDiv = document.getElementById('accountListContainer');
+        const accountCountSpan = document.getElementById('accountCount');
+        const newNameInput = document.getElementById('newAccountName');
+        const newSecretInput = document.getElementById('newSecret');
+        const createBtn = document.getElementById('createAccountBtn');
+        const closeDialogBtn = document.getElementById('closeDialogBtn');
+        const copyTokenBtn = document.getElementById('copyTokenBtn');
+        const dialogAccountName = document.getElementById('dialogAccountName');
+        const dialogAccountIssuer = document.getElementById('dialogAccountIssuer');
+        const dialogTokenSpan = document.getElementById('dialogToken');
+        const progressFill = document.getElementById('progressFill');
+        const secondsSpan = document.getElementById('secondsRemaining');
+
+        // 导入导出元素
+        const exportBtn = document.getElementById('exportBtn');
+        const importBtn = document.getElementById('importBtn');
+        const importFileInput = document.getElementById('importFileInput');
+
+        // ---------- Base32 解码 ----------
+        function base32Decode(base32Str) {
+            let str = base32Str.toUpperCase().replace(/\s+/g, '').replace(/-/g, '').replace(/=/g, '');
+            if (str.length === 0) throw new Error('密钥不能为空');
+            let bits = 0, value = 0;
+            const bytes = [];
+            for (let i = 0; i < str.length; i++) {
+                const idx = BASE32_ALPHABET.indexOf(str[i]);
+                if (idx === -1) throw new Error(`无效Base32字符: ${str[i]}`);
+                value = (value << 5) | idx;
+                bits += 5;
+                if (bits >= 8) {
+                    bytes.push((value >>> (bits - 8)) & 0xFF);
+                    bits -= 8;
+                }
+            }
+            return new Uint8Array(bytes);
+        }
+
+        // ---------- TOTP 生成 ----------
+        function generateTOTP(secretBase32) {
+            try {
+                const keyBytes = base32Decode(secretBase32);
+                const period = 30, digits = 6;
+                const counter = Math.floor(Date.now() / 1000 / period);
+                const counterBuffer = new ArrayBuffer(8);
+                const dv = new DataView(counterBuffer);
+                dv.setUint32(0, Math.floor(counter / 0x100000000), false);
+                dv.setUint32(4, counter & 0xffffffff, false);
+                
+                const shaObj = new jsSHA("SHA-1", "ARRAYBUFFER");
+                shaObj.setHMACKey(keyBytes.buffer, "ARRAYBUFFER");
+                shaObj.update(counterBuffer);
+                const hmac = new Uint8Array(shaObj.getHMAC("ARRAYBUFFER"));
+                
+                const offset = hmac[hmac.length - 1] & 0x0F;
+                const binary = ((hmac[offset] & 0x7F) << 24) | ((hmac[offset+1] & 0xFF) << 16) | ((hmac[offset+2] & 0xFF) << 8) | (hmac[offset+3] & 0xFF);
+                const otp = binary % Math.pow(10, digits);
+                return otp.toString().padStart(digits, '0');
+            } catch (e) {
+                console.warn(e);
+                return 'ERROR';
+            }
+        }
+
+        function getRemainingSeconds(period = 30) {
+            return period - (Math.floor(Date.now() / 1000) % period);
+        }
+
+        // ---------- 存储 ----------
+        function loadAccounts() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                try {
+                    accounts = JSON.parse(stored);
+                    accounts = accounts.map(acc => { if (!acc.id) acc.id = 'id_' + Date.now() + Math.random(); return acc; });
+                } catch(e) { accounts = []; }
+            } else {
+                accounts = [{ id: 'example1', name: '示例: Alice@work', secret: 'JBSWY3DPEHPK3PXP' }];
+                saveAccounts();
+            }
+            accounts = accounts.filter(acc => acc && typeof acc.name === 'string' && typeof acc.secret === 'string');
+        }
+
+        function saveAccounts() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+        }
+
+        function renderAccountList() {
+            if (!accounts.length) {
+                accountListDiv.innerHTML = `<div class="empty-list">✨ 还没有账号，请添加或导入</div>`;
+                accountCountSpan.textContent = `0 个`;
+                return;
+            }
+            let html = '';
+            accounts.forEach(acc => {
+                const safeName = escapeHtml(acc.name) || '未命名';
+                const secretPreview = acc.secret ? (acc.secret.substring(0,6) + '…') : '';
+                html += `<div class="account-item" data-account-id="${acc.id}">
+                    <div class="account-info"><span class="account-name">${safeName}</span><span class="account-meta">🔑 ${escapeHtml(secretPreview)}</span></div>
+                    <button class="delete-btn" data-delete-id="${acc.id}" title="删除账号">🗑️</button>
+                </div>`;
+            });
+            accountListDiv.innerHTML = html;
+            accountCountSpan.textContent = `${accounts.length} 个`;
+        }
+
+        function escapeHtml(text) {
+            return String(text).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+        }
+
+        function deleteAccountById(accountId) {
+            accounts = accounts.filter(acc => acc.id !== accountId);
+            saveAccounts();
+            if (currentDialogAccount && currentDialogAccount.id === accountId) closeDialogAndCleanup();
+            renderAccountList();
+        }
+
+        function createAccount(name, secretRaw) {
+            if (!name?.trim()) { alert('请输入账号名称'); return false; }
+            let secret = secretRaw.trim();
+            if (!secret) { alert('请输入共享密钥'); return false; }
+            secret = secret.toUpperCase().replace(/\s+/g, '').replace(/-/g, '');
+            if (!/^[A-Z2-7]+$/.test(secret)) { alert('密钥包含无效字符，仅支持Base32 (A-Z 2-7)'); return false; }
+            if (secret.length < 8 && !confirm('密钥长度较短，可能无效。确定添加吗？')) return false;
+            
+            accounts.push({ id: 'acc_' + Date.now() + '_' + Math.random().toString(36).substr(2,6), name: name.trim(), secret });
+            saveAccounts();
+            renderAccountList();
+            newNameInput.value = newSecretInput.value = '';
+            return true;
+        }
+
+        // ---------- 导入导出功能 ----------
+        function exportAccounts() {
+            if (accounts.length === 0) { alert('没有账号可导出'); return; }
+            if (!confirm('导出文件包含所有账号的共享密钥（敏感信息），请妥善保管。确定导出？')) return;
+            
+            const dataStr = JSON.stringify(accounts, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+            a.download = `totp_backup_${date}.json`;
+            a.href = url;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importAccountsFromFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (!Array.isArray(imported)) throw new Error('格式错误：需要数组');
+                    
+                    // 基本验证
+                    const validAccounts = imported.filter(acc => acc && typeof acc.name === 'string' && typeof acc.secret === 'string');
+                    if (validAccounts.length === 0) { alert('文件中没有有效的账号数据'); return; }
+                    
+                    // 询问替换或合并
+                    const action = confirm('导入账号：\n点击“确定”将替换当前所有账号；\n点击“取消”将合并到现有列表（基于ID去重）。');
+                    if (action) {
+                        // 替换
+                        accounts = validAccounts.map(acc => ({ ...acc, id: acc.id || 'imp_' + Date.now() + Math.random() }));
+                    } else {
+                        // 合并：用Map基于id去重，新导入的覆盖旧
+                        const map = new Map(accounts.map(a => [a.id, a]));
+                        validAccounts.forEach(acc => { map.set(acc.id, acc); });
+                        accounts = Array.from(map.values());
+                    }
+                    saveAccounts();
+                    renderAccountList();
+                    if (currentDialogAccount) closeDialogAndCleanup();
+                    alert(`成功导入 ${validAccounts.length} 个账号。`);
+                } catch (err) {
+                    alert('导入失败：' + err.message);
+                } finally {
+                    importFileInput.value = ''; // 允许重复选择同一文件
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // ---------- 弹窗逻辑 ----------
+        function openDialogForAccount(account) {
+            if (timerInterval) clearInterval(timerInterval);
+            currentDialogAccount = account;
+            dialogAccountName.textContent = account.name;
+            dialogAccountIssuer.textContent = `🔐 ${account.name}`;
+            updateDialogTokenAndProgress();
+            timerInterval = setInterval(updateDialogTokenAndProgress, 200);
+            dialog.showModal();
+        }
+
+        function updateDialogTokenAndProgress() {
+            if (!currentDialogAccount) return;
+            let token = '------';
+            try { token = generateTOTP(currentDialogAccount.secret); } catch(e) { token = 'ERROR'; }
+            dialogTokenSpan.textContent = token;
+            const remaining = getRemainingSeconds();
+            secondsSpan.textContent = remaining;
+            progressFill.style.width = Math.max(0, (remaining/30)*100) + '%';
+            progressFill.style.background = remaining <= 7 ? '#ef4444' : '#3b82f6';
+        }
+
+        function closeDialogAndCleanup() {
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+            dialog.close();
+            currentDialogAccount = null;
+        }
+
+        function copyTokenToClipboard() {
+            const token = dialogTokenSpan.textContent;
+            if (!token || token === '------' || token === 'ERROR') return;
+            navigator.clipboard?.writeText(token).then(() => {
+                copyTokenBtn.textContent = '✅ 已复制!';
+                setTimeout(() => copyTokenBtn.textContent = '📋 复制验证码', 1200);
+            }).catch(() => alert('复制失败，可手动复制'));
+        }
+
+        // ---------- 事件绑定 ----------
+        function bindEvents() {
+            createBtn.addEventListener('click', () => createAccount(newNameInput.value, newSecretInput.value));
+            newSecretInput.addEventListener('keypress', e => { if(e.key==='Enter') createBtn.click(); });
+            newNameInput.addEventListener('keypress', e => { if(e.key==='Enter') createBtn.click(); });
+            
+            accountListDiv.addEventListener('click', e => {
+                const deleteBtn = e.target.closest('.delete-btn');
+                if (deleteBtn) {
+                    e.stopPropagation();
+                    const id = deleteBtn.dataset.deleteId;
+                    if (id && confirm('确定删除这个账号吗？')) deleteAccountById(id);
+                    return;
+                }
+                const item = e.target.closest('.account-item');
+                if (item) {
+                    const account = accounts.find(a => a.id === item.dataset.accountId);
+                    if (account) openDialogForAccount(account);
+                }
+            });
+            
+            closeDialogBtn.addEventListener('click', closeDialogAndCleanup);
+            dialog.addEventListener('close', () => { if (timerInterval) clearInterval(timerInterval); currentDialogAccount = null; });
+            copyTokenBtn.addEventListener('click', copyTokenToClipboard);
+            
+            // 导入导出
+            exportBtn.addEventListener('click', exportAccounts);
+            importBtn.addEventListener('click', () => importFileInput.click());
+            importFileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) importAccountsFromFile(file);
+            });
+        }
+
+        function init() {
+            loadAccounts();
+            renderAccountList();
+            bindEvents();
+        }
+
+        init();
+    })();
+</script>
+</body>
+</html>
